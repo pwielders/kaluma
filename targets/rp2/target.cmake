@@ -73,6 +73,7 @@ set(SOURCES
   ${TARGET_SRC_DIR}/spi.c
   ${TARGET_SRC_DIR}/rtc.c
   ${TARGET_SRC_DIR}/main.c
+  ${TARGET_SRC_DIR}/netdev.c
   ${BOARD_DIR}/board.c)
 
 include_directories(${TARGET_INC_DIR} ${BOARD_DIR})
@@ -118,7 +119,8 @@ if(BOARD STREQUAL "pico-w")
   ${TARGET_LIBS}
   pico_lwip
   # pico_cyw43_arch_lwip_threadsafe_background || pico_cyw43_arch_lwip_poll
-  pico_cyw43_arch_lwip_poll)
+  pico_cyw43_arch_lwip_threadsafe_background
+  pico_multicore)
 endif()
 
 include(${CMAKE_SOURCE_DIR}/tools/kaluma.cmake)
