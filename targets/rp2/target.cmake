@@ -74,6 +74,7 @@ set(SOURCES
   ${TARGET_SRC_DIR}/rtc.c
   ${TARGET_SRC_DIR}/main.c
   ${TARGET_SRC_DIR}/netdev.c
+  ${CMAKE_SOURCE_DIR}/lib/dhcpserver/dhcpserver.c
   ${BOARD_DIR}/board.c)
 
 include_directories(${TARGET_INC_DIR} ${BOARD_DIR})
