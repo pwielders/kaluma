@@ -45,36 +45,6 @@
 #define MSTR_NET_LISTENING "listening"
 #define MSTR_NET_CLOSE "close"
 
-#endif /* __NET_MAGIC_STRINGS_H */
-/* Copyright (c) 2017 Kaluma
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-#ifndef __PICO_CYW43_MAGIC_STRINGS_H
-#define __PICO_CYW43_MAGIC_STRINGS_H
-
-#define MSTR_NET_PICO_CYW43 "PicoCYW43"
-#define MSTR_NET_GETGPIO "getGpio"
-#define MSTR_NET_PUTGPIO "putGpio"
-
-#define MSTR_NET_PICO_CYW43_WIFI "PicoCYW43WIFI"
 #define MSTR_NET_WIFI_ERRNO "errno"
 #define MSTR_NET_WIFI_ASSOC_CB "assoc_cb"
 #define MSTR_NET_WIFI_CONNECT_CB "connect_cb"
@@ -85,6 +55,15 @@
 #define MSTR_NET_WIFI_DISCONNECT "disconnect"
 #define MSTR_NET_WIFI_GET_CONNECTION "get_connection"
 
+#endif /* __NET_MAGIC_STRINGS_H */
+
+#if 0
+
+#define MSTR_NET_PICO_CYW43 "PicoCYW43"
+#define MSTR_NET_GETGPIO "getGpio"
+#define MSTR_NET_PUTGPIO "putGpio"
+
+#define MSTR_NET_PICO_CYW43_WIFI "PicoCYW43WIFI"
 #define MSTR_NET_PICO_CYW43_NETWORK "PicoCYW43Network"
 #define MSTR_NET_NETWORK_ERRNO "errno"
 #define MSTR_NET_NETWORK_MAC "mac"
@@ -128,4 +107,4 @@
 #define MSTR_NET_WIFI_APMODE_GET_STAS_FN "get_clients"
 
 #define MSTR_NET_PASSWORD "password"
-#endif /* __PICO_CYW43_MAGIC_STRINGS_H */
+#endif 

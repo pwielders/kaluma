@@ -21,13 +21,13 @@
 
 #include <stdlib.h>
 #include <port/netdev.h>
+#include <string.h>
 
 #include "err.h"
 #include "jerryscript.h"
 #include "jerryxx.h"
 #include "system.h"
-
-#define MAX_GPIO_NUM 2
+#include "net_magic_strings.h"
 
 typedef struct {
   uint8_t fd;
@@ -44,10 +44,10 @@ typedef struct scan_data_s {
 } scan_data_t;
 
 scan_data_t*  scan_results = NULL;
-socket_data_t socket_map[MAX_SOCKET];
+socket_data_t socket_map[KALUMA_MAX_SOCKETS];
 
-void bytes_to_string(const uint8_t* input, uit8_t len, char* buffer) {
-  static const char hex_array = "0123456789ABCDEF";
+void bytes_to_string(const uint8_t* input, uint8_t len, char* buffer) {
+  static const char hex_array[] = "0123456789ABCDEF";
 
   for (uint8_t index = 0; index < len; index++) {
     buffer[(index * 3) + 0] = hex_array[input[index] >> 4];
@@ -61,19 +61,12 @@ JERRYXX_FUN(net_ctor_fn) {
   return jerry_create_undefined();
 }
 
-static int __check_gpio(uint32_t pin) {
-  if (pin > MAX_GPIO_NUM) {
-    return -1;
-  }
-  return 0;
-}
-
 void wifi_report_implementation (const char* ssid, const uint8_t bssid[6], const wifi_authentication auth, const uint8_t channel, const int strength) {
-  scan_data_t* new_node = (scan_data_t *) malloc(sizeof(__scan_data_t));
+  scan_data_t* new_node = (scan_data_t *) malloc(sizeof(scan_data_t));
   if (new_node != NULL) {
     new_node->next = NULL;
-    strncpy(new_node->ssid, ssid, sizeof(scan_data_t.ssid));
-    memcpy(new_node->bssid, bssid, sizeof(scan_data_t.bssid));
+    strncpy(new_node->ssid, ssid, sizeof(((scan_data_t*)0)->ssid));
+    memcpy(new_node->bssid, bssid, sizeof(((scan_data_t*)0)->bssid));
     new_node->rssi = strength;
     new_node->channel = channel;
     new_node->auth_mode = auth;
@@ -90,30 +83,12 @@ void wifi_report_implementation (const char* ssid, const uint8_t bssid[6], const
   }
 }
 
-wifi_report = wifi_report_implementation;
-
-JERRYXX_FUN(net_get_gpio) {
-  JERRYXX_CHECK_ARG_NUMBER(0, "gpio");
-  uint32_t gpio = JERRYXX_GET_ARG_NUMBER(0);
-  if (__check_gpio(gpio) < 0) {
-    return jerry_create_error(JERRY_ERROR_TYPE,
-                              (const jerry_char_t *)"GPIO pin is not exist");
+static void initialize() {
+  static bool initialized = false;
+  if (initialized == false) {
+    initialized = true;
+    wifi_callbacks.callback_report = wifi_report_implementation;
   }
-  bool ret = cyw43_arch_gpio_get(gpio);
-  return jerry_create_boolean(ret);
-}
-
-JERRYXX_FUN(net_put_gpio) {
-  JERRYXX_CHECK_ARG_NUMBER(0, "gpio");
-  JERRYXX_CHECK_ARG_BOOLEAN(1, "value");
-  uint32_t gpio = JERRYXX_GET_ARG_NUMBER(0);
-  bool value = JERRYXX_GET_ARG_BOOLEAN(1);
-  if (__check_gpio(gpio) < 0) {
-    return jerry_create_error(JERRY_ERROR_TYPE,
-                              (const jerry_char_t *)"GPIO pin is not exist");
-  }
-  cyw43_arch_gpio_put(gpio, value);
-  return jerry_create_undefined();
 }
 
 JERRYXX_FUN(net_wifi_ctor_fn) {
@@ -172,7 +147,7 @@ JERRYXX_FUN(net_wifi_scan) {
         index++;
       }
  
-      jerry_value_t scan_array = jerry_create_array(count);
+      jerry_value_t scan_array = jerry_create_array(index);
 
       current = scan_results;
       index = 0;

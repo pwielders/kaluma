@@ -64,6 +64,9 @@ static cyw43_driver_t      __cyw43_drv;
 static socket_data_t       __socket_info[KALUMA_MAX_SOCKETS];
 static dhcp_server_t       __dhcp_server;
 
+socket_callbacks_t socket_callbacks;
+wifi_callbacks_t   wifi_callbacks;
+
 static uint8_t allocate_fd(const socket_state state, void* pcb);
 
 // ----------------------------------------------------------------------------
@@ -93,7 +96,10 @@ static err_t tcp_received_cb(void* arg, struct tcp_pcb* tpcb, struct pbuf* p, er
       if (tpcb == NULL) {
         tcp_recved(tpcb, p->tot_len);
       }
-      socket_received(index, p->tot_len, buffer, &(info->addr), info->port);
+      if(socket_callbacks.callback_received != NULL) {
+        const struct ip_addr_t* address = (struct ip_addr_t*) &(info->addr);
+        socket_callbacks.callback_received(index, p->tot_len, buffer, address, info->port);
+      }
       free(buffer);
     }
   }
@@ -124,7 +130,10 @@ static void udp_received_cb(void *arg, struct udp_pcb *upcb, struct pbuf *p,
         memcpy(&(buffer[offset]), (const uint8_t*) q->payload, q->len);
         offset += q->len;
       }
-      socket_received(index, p->tot_len, buffer, addr, port);
+      if(socket_callbacks.callback_received != NULL) {
+        const struct ip_addr_t* address = (struct ip_addr_t*) addr;
+        socket_callbacks.callback_received(index, p->tot_len, buffer, address, port);
+      }
       free(buffer);
     }
   }
@@ -149,7 +158,9 @@ static err_t connect_cb(void *arg, struct tcp_pcb *tpcb, err_t err) {
     }
     cyw43_arch_lwip_end();
 
-    socket_connected(index);
+    if(socket_callbacks.callback_connected != NULL) {
+      socket_callbacks.callback_connected(index);
+    }
   }
 
   return ERR_OK;
@@ -170,7 +181,9 @@ static err_t accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) {
                                       (__socket_info[accepted].state & socket_type_mask);
       cyw43_arch_lwip_end();
 
-      socket_accepted(index, accepted);
+      if(socket_callbacks.callback_accepted != NULL) {
+        socket_callbacks.callback_accepted(index, accepted);
+      }
     }
   }
   return ERR_OK;
@@ -251,8 +264,10 @@ static uint8_t allocate_fd(const socket_state state, void* pcb) {
   return result;
 }
 
-int socket_resolve(const uint8_t timeout, const char* name, ip_addr_t* ipv4) {
+int socket_resolve(const uint8_t timeout, const char* name, struct ip_addr_t* address) {
   int result = ERR_INPROGRESS;
+
+  ip_addr_t* ipv4 = (ip_addr_t*)address;
 
   cyw43_arch_lwip_begin();
 
@@ -305,8 +320,10 @@ int8_t socket_datagram() {
   return (entry < KALUMA_MAX_SOCKETS ? entry : -1);
 }
 
-int socket_bind (const uint8_t fd, const ip_addr_t* ipv4, const uint16_t port) {
+int socket_bind (const uint8_t fd, const struct ip_addr_t* address, const uint16_t port) {
   int err = -1; 
+
+  const ip_addr_t* ipv4 = (const ip_addr_t*) address;
 
   cyw43_arch_lwip_begin();
 
@@ -372,7 +389,9 @@ int socket_connect(const uint8_t fd) {
     cyw43_arch_lwip_end();
 
     if (result == ERR_OK) {
-      socket_connected(fd);
+      if(socket_callbacks.callback_connected != NULL) {
+        socket_callbacks.callback_connected(fd);
+      }
     }
   }
 
@@ -430,7 +449,9 @@ int socket_close(const uint8_t fd) {
   
   cyw43_arch_lwip_end();
 
-  socket_closed(fd);
+  if (socket_callbacks.callback_closed != NULL) {
+    socket_callbacks.callback_closed(fd);
+  }
 
   return (err);
 }
@@ -455,12 +476,14 @@ static int scan_cb(void *env, const cyw43_ev_scan_result_t* result) {
      auth_mode = WIFI_AUTH_OPEN;
   }
 
-  wifi_report((const char*) result->ssid, result->bssid, auth_mode, result->channel, result->rssi);
+  if (wifi_callbacks.callback_report != NULL) {
+    wifi_callbacks.callback_report((const char*) result->ssid, result->bssid, auth_mode, result->channel, result->rssi);
+  }
 
   return 0;
 }
 
-void wifi_reset() {
+int wifi_reset() {
   if (__cyw43_status == CYW43_STATUS_DISABLED) {
     for (uint8_t index = 0; index < KALUMA_MAX_SOCKETS; index++) {
       __socket_info[index].state = NET_SOCKET_STATE_CLOSED;
@@ -488,6 +511,7 @@ void wifi_reset() {
       __cyw43_status = CYW43_STATUS_STATION;
     }
   }
+  return (__cyw43_status = CYW43_STATUS_STATION ? ERR_OK : -1);
 }
  
 void wifi_process() {
@@ -582,7 +606,9 @@ int wifi_connect(const char* ssid, const uint8_t* bssid, const wifi_authenticati
   int result = cyw43_arch_wifi_connect_bssid_timeout_ms(ssid, bssid, password, auth, CONNECT_TIMEOUT);
 
   if (result == ERR_OK) {
-    wifi_link(__cyw43_drv.ssid, true);
+    if (wifi_callbacks.callback_link != NULL) {
+      wifi_callbacks.callback_link(__cyw43_drv.ssid, true);
+    }
   }
 
   return (result);
@@ -591,13 +617,15 @@ int wifi_connect(const char* ssid, const uint8_t* bssid, const wifi_authenticati
 int wifi_disconnect() {
   int result = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);
   if (result == 0) {
-    wifi_link(__cyw43_drv.ssid, false);
+    if (wifi_callbacks.callback_link != NULL) {
+      wifi_callbacks.callback_link(__cyw43_drv.ssid, false);
+    }
     __cyw43_drv.ssid[0] = '\0';
   }
   return (result);
 }
 
-int wifi_access_point(const char* ssid, const char* passwd, const ip_addr_t* gw, const ip_addr_t* mask)  {
+int wifi_access_point(const char* ssid, const char* passwd, const struct ip_addr_t* gw, const uint8_t mask)  {
   int result = -1;
 
   if (cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_AP) == CYW43_LINK_UP) {
@@ -606,8 +634,10 @@ int wifi_access_point(const char* ssid, const char* passwd, const ip_addr_t* gw,
       if ((__cyw43_status & CYW43_STATUS_ACCESSPOINT) == 0) {
         cyw43_arch_enable_ap_mode(ssid, passwd, CYW43_AUTH_WPA2_AES_PSK);
 
+        uint32_t real_mask = (0xFFFFFFFF < (32 - mask));
+
         // start DHCP server
-	dhcp_server_init(&__dhcp_server, (ip_addr_t*) gw, (ip_addr_t*) mask);
+	dhcp_server_init(&__dhcp_server, (ip_addr_t*) gw, (ip_addr_t*) &real_mask);
     
         cyw43_arch_lwip_begin();
         __cyw43_status |= CYW43_STATUS_ACCESSPOINT;
