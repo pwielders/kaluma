@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <port/netdev.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "err.h"
 #include "jerryscript.h"
@@ -29,9 +30,16 @@
 #include "system.h"
 #include "net_magic_strings.h"
 
-typedef struct scan_data_s {
+#define WIFI_CONNECT_TIMEOUT    20
+#define WIFI_SCAN_TIMEOUT       10
+
+typedef struct wifi_info_s {
   char ssid[33];
   uint8_t bssid[6];
+} wifi_info_t;
+
+typedef struct scan_data_s {
+  wifi_info_t info;
   wifi_authentication auth_mode;
   int rssi;
   uint8_t channel;
@@ -40,9 +48,8 @@ typedef struct scan_data_s {
 
 scan_data_t*  scan_results = NULL;
 
-void bytes_to_string(const uint8_t* input, uint8_t len, char* buffer) {
+static void bytes_to_string(const uint8_t* input, uint8_t len, char* buffer) {
   static const char hex_array[] = "0123456789ABCDEF";
-
   for (uint8_t index = 0; index < len; index++) {
     buffer[(index * 3) + 0] = hex_array[input[index] >> 4];
     buffer[(index * 3) + 1] = hex_array[input[index] & 0x0F];
@@ -51,16 +58,121 @@ void bytes_to_string(const uint8_t* input, uint8_t len, char* buffer) {
   buffer[(len * 3) - 1 ] = '\0';
 }
 
-JERRYXX_FUN(net_ctor_fn) {
-  return jerry_create_undefined();
+static uint8_t convert(const char element) {
+  if (isdigit(element)) {
+    return (element - '0');
+  }
+  else if (isxdigit(element)) {
+    return (toupper(element) - 'A' + 10);
+  }
+  return (0xFF);
 }
 
-void wifi_report_implementation (const char* ssid, const uint8_t bssid[6], const wifi_authentication auth, const uint8_t channel, const int strength) {
+static uint8_t string_to_bytes(const char* text, uint8_t* input, const uint8_t len) {
+  uint8_t index  = 0;
+  uint8_t loaded = 0;
+  while ((text[index] != '\0') && (text[index+1] != '\0') && (loaded < len)) {
+    input[loaded++] = (convert(text[index]) << 4) | convert(text[index + 1]);
+    index += ( ((text[index+2] == '\0') || (isxdigit((uint8_t) text[index+2]))) ? 2 : 3 );
+  }
+  return (loaded);
+}
+
+static int min(const int left, const int right) {
+    return (left >= right ? right : left);
+}
+
+static uint8_t string_to_ipv4_address(const char* text, ipv4_address_t* address)
+{
+  const char* location = text;
+  uint32_t value = 0;
+  uint8_t  dot = 8;
+    
+  while (isdigit((uint8_t) *location)) {
+    uint8_t base = 10;
+
+    /* Determine the base, 0x=hex (16), 0=octal (8), 1-9=decimal (10). */
+    if (*location == '0') {
+      ++location;
+      if (toupper(*location) != 'X') {
+        base = 8;
+      }
+      else {
+        base = 16;
+        ++location;
+      }
+    }
+    
+    /* Determine the actual value */ 
+    for(;;) {
+      uint8_t digit = (uint8_t) *location;
+      uint8_t entry = (isdigit(digit) ? (digit - '0') : (isxdigit(digit) ? (digit - (islower(digit) ? 'a' : 'A') + 10) : 0xFF));
+      
+      if (entry >= base) {
+      	break;
+      }
+      else {
+        uint32_t old = value;
+        value = (value * base) + entry;
+        
+        if (old > value) {
+          // Oops the number does not fit 32 bits..
+          break;
+        }
+        ++location;
+      }
+    }
+ 
+    /* Seems we can not handle it anymore, lets see if we hit a delimiter */    
+    if (*location == '.') {
+      /* Check if the segmentations still fits...
+       * Internet formats:
+       *  a.b.c.d (a/b/c/d 8 bits)
+       *  a.b.c   (a/b 8 bits, c 16 bits)
+       *  a.b     (a 8 bits, b 24 bits)
+       */
+       if (value < (1 << dot)) {
+         dot += 8;
+         ++location;
+       }  
+    }
+  }
+  if ((dot > 8) && ((*location == '\0') || (*location == ':') ||(isspace((uint8_t) *location)))) { 
+    address->addr = value;
+    return (*location - *text);
+  }
+  return (0);
+}
+
+static uint8_t string_to_ip_address(const char* text, ip_address_t* address)
+{
+  if ( (text != NULL) && (address != NULL)) {
+    uint8_t index = 0;
+    while ((text[index] != 0) && (text[index] != ':') && (text[index] != '.')) {
+      ++index;
+    }
+
+    if (text[index] == ':') {
+      /* it is detected as an IPv6 address */
+      /* to be implemented!!! */
+      // SET_IPV6(*addr);
+      // return string_to_ipv6_address(text, &(address->ipv6));
+    }
+    else if (text[index] == '.') {
+      /* it is detected as an IPv4 address */
+      SET_IPV4(*addr);
+      return string_to_ipv4_address(text, &(address->ipv4));
+    }
+  }
+  return 0;
+}
+
+static void wifi_report_implementation (const char* ssid, const uint8_t bssid[6], const wifi_authentication auth, const uint8_t channel, const int strength) {
   scan_data_t* new_node = (scan_data_t *) malloc(sizeof(scan_data_t));
   if (new_node != NULL) {
     new_node->next = NULL;
-    strncpy(new_node->ssid, ssid, sizeof(((scan_data_t*)0)->ssid));
-    memcpy(new_node->bssid, bssid, sizeof(((scan_data_t*)0)->bssid));
+    strncpy(new_node->info.ssid, ssid, sizeof(((scan_data_t*)0)->info.ssid)-1);
+    memcpy(new_node->info.bssid, bssid, sizeof(((scan_data_t*)0)->info.bssid));
     new_node->rssi = strength;
     new_node->channel = channel;
     new_node->auth_mode = auth;
@@ -77,11 +189,12 @@ void wifi_report_implementation (const char* ssid, const uint8_t bssid[6], const
   }
 }
 
-static void initialize() {
-  static bool initialized = false;
-  if (initialized == false) {
-    initialized = true;
-    wifi_callbacks.callback_report = wifi_report_implementation;
+static void wifi_link_implementation (const char* ssid, const uint8_t bssid[6], const bool connected) {
+  if (connected == false) {
+    printf("Connected to %s.\n\r", ssid);
+  }
+  else {
+    printf("Disconnected from  %s.\n\r", ssid);
   }
 }
 
@@ -119,7 +232,7 @@ JERRYXX_FUN(net_wifi_scan) {
   if (JERRYXX_HAS_ARG(0)) {  // Do nothing if callback is NULL
     jerry_value_t callback = JERRYXX_GET_ARG(0);
     jerry_value_t scan_js_cb = jerry_acquire_value(callback);
-    int ret = wifi_scan();
+    int ret = wifi_scan(WIFI_SCAN_TIMEOUT);
     if (ret < 0) {
       jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO,
                                   -1);
@@ -146,32 +259,32 @@ JERRYXX_FUN(net_wifi_scan) {
       current = scan_results;
       index = 0;
       char  buffer[33];
-      const char* selected;
+      char* selected;
 
       while (current) {
         jerry_value_t obj = jerry_create_object();
 
-        jerryxx_set_property_string(obj, MSTR_NET_SCANINFO_SSID, current->ssid);
+        jerryxx_set_property_string(obj, MSTR_NET_WIFI_SCANINFO_SSID, current->info.ssid);
 
-        bytes_to_string(current->bssid, 6, buffer);
-        jerryxx_set_property_string(obj, MSTR_NET_SCANINFO_BSSID, buffer);
+        bytes_to_string(current->info.bssid, 6, buffer);
+        jerryxx_set_property_string(obj, MSTR_NET_WIFI_SCANINFO_BSSID, buffer);
 
-        if ((current->auth_mode & (CYW43_WIFI_AUTH_WPA | CYW43_WIFI_AUTH_WPA2)) == (CYW43_WIFI_AUTH_WPA | CYW43_WIFI_AUTH_WPA2)) {
+        if ((current->auth_mode & (WIFI_AUTH_WPA | WIFI_AUTH_WPA2)) == (WIFI_AUTH_WPA | WIFI_AUTH_WPA2)) {
           selected = "WPA2_WPA_PSK";
-        } else if (current->auth_mode & CYW43_WIFI_AUTH_WPA2) {
+        } else if (current->auth_mode & WIFI_AUTH_WPA2) {
           selected = "WPA2_PSK";
-        } else if (current->auth_mode & CYW43_WIFI_AUTH_WPA) {
+        } else if (current->auth_mode & WIFI_AUTH_WPA) {
           selected = "WPA_PSK";
-        } else if (current->auth_mode & CYW43_WIFI_AUTH_WEP_PSK) {
+        } else if (current->auth_mode & WIFI_AUTH_WEP_PSK) {
           selected = "WEP_PSK";
-        } else if (current->auth_mode == CYW43_WIFI_AUTH_OPEN) {
+        } else if (current->auth_mode == WIFI_AUTH_OPEN) {
           selected = "OPEN";
         } else {
-          selecetd = "-"; // Unknown
+          selected = "-"; // Unknown
         }
-        jerryxx_set_property_string(obj, MSTR_NET_SCANINFO_SECURITY, selected);
-        jerryxx_set_property_number(obj, MSTR_NET_SCANINFO_RSSI, current->rssi);
-        jerryxx_set_property_number(obj, MSTR_NET_SCANINFO_CHANNEL, current->channel);
+        jerryxx_set_property_string(obj, MSTR_NET_WIFI_SCANINFO_SECURITY, selected);
+        jerryxx_set_property_number(obj, MSTR_NET_WIFI_SCANINFO_RSSI, current->rssi);
+        jerryxx_set_property_number(obj, MSTR_NET_WIFI_SCANINFO_CHANNEL, current->channel);
         jerry_value_t ret = jerry_set_property_by_index(scan_array, index++, obj);
         jerry_release_value(ret);
         jerry_release_value(obj);
@@ -199,17 +312,32 @@ JERRYXX_FUN(net_wifi_connect) {
   JERRYXX_CHECK_ARG(0, "connectInfo");
   JERRYXX_CHECK_ARG_FUNCTION_OPT(1, "callback");
   jerry_value_t connect_info = JERRYXX_GET_ARG(0);
-  jerry_value_t ssid = jerryxx_get_property(connect_info, MSTR_NET_SCANINFO_SSID);
+  jerry_value_t ssid = jerryxx_get_property(connect_info, MSTR_NET_WIFI_SCANINFO_SSID);
+  jerry_value_t bssid = jerryxx_get_property(connect_info, MSTR_NET_WIFI_SCANINFO_BSSID);
 
-  if (!jerry_value_is_string(ssid)) {
-    jerry_release_value(ssid);
-    result = jerry_create_error(JERRY_ERROR_TYPE, (const jerry_char_t *)"SSID error");
+  if (!jerry_value_is_string(ssid) && !jerry_value_is_string(bssid)) {
+    result = jerry_create_error(JERRY_ERROR_TYPE, (const jerry_char_t *)"no SSID/BSSID error");
   }
   else {
     char* buffer = NULL;
     char* pw_str = NULL;
-    jerry_size_t ssid_len = std::min(jerryxx_get_ascii_string_size(ssid), 32);
-    jerry_value_t pw = jerryxx_get_property(connect_info, MSTR_NET_PASSWORD);
+    uint8_t raw_bssid[6];
+    jerry_size_t ssid_len = 0;
+
+    if (!jerry_value_is_string(bssid)) {
+      memset(raw_bssid, 0, sizeof(raw_bssid));
+    }
+    else {
+      char storage[20];
+      jerryxx_string_to_ascii_char_buffer(bssid, (jerry_char_t*) storage, sizeof(storage));
+      string_to_bytes(storage, raw_bssid, sizeof(raw_bssid));
+    }
+
+    if (jerry_value_is_string(ssid)) {
+      ssid_len = min(jerryxx_get_ascii_string_size(ssid), 32);
+    }
+
+    jerry_value_t pw = jerryxx_get_property(connect_info, MSTR_NET_WIFI_PASSWORD);
 
     if (!jerry_value_is_string(pw)) {
       buffer = (char*) malloc(ssid_len + 1);
@@ -217,17 +345,24 @@ JERRYXX_FUN(net_wifi_connect) {
     else {
       jerry_size_t pw_len = jerryxx_get_ascii_string_size(pw);
       buffer = (char*) malloc(ssid_len + 1 + pw_len + 1);
-      pw_str = buffer[ssid_len + 1];
-      jerryxx_string_to_ascii_char_buffer(pw, pw_str, pw_len);
+      pw_str = &(buffer[ssid_len + 1]);
+      jerryxx_string_to_ascii_char_buffer(pw, (jerry_char_t*) pw_str, pw_len);
       pw_str[pw_len] = '\0';
     }
-    jerryxx_string_to_ascii_char_buffer(ssid, buffer, ssid_len); 
+    if (ssid_len > 0) {
+      jerryxx_string_to_ascii_char_buffer(ssid, (jerry_char_t*) buffer, ssid_len); 
+    }
     buffer[ssid_len] = '\0';
 
+    jerry_release_value(bssid);
     jerry_release_value(ssid);
     jerry_release_value(pw);
 
-    int connect_ret = wifi_connect_timeout_ms(buffer, pw_str, -1, CONNECT_TIMEOUT);
+    int connect_ret = wifi_connect(WIFI_CONNECT_TIMEOUT, buffer, raw_bssid, WIFI_AUTH_UNKNOWN, pw_str);
+
+    // Lets wait till we are connected or for a time-out..
+
+
     free(buffer);
 
     if (connect_ret) {
@@ -305,11 +440,11 @@ JERRYXX_FUN(net_wifi_get_connection) {
   }
   else {
     jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
-    jerryxx_set_property_string(obj, MSTR_NET_SCANINFO_SSID, ssid);
+    jerryxx_set_property_string(obj, MSTR_NET_WIFI_SCANINFO_SSID, (char*) ssid);
     if (bssid != NULL) {
       char buffer[18];
       bytes_to_string(bssid, 6, buffer);
-      jerryxx_set_property_string(obj, MSTR_NET_SCANINFO_BSSID, "");
+      jerryxx_set_property_string(obj, MSTR_NET_WIFI_SCANINFO_BSSID, "");
     }
   }
 
@@ -340,185 +475,141 @@ JERRYXX_FUN(net_wifi_get_connection) {
 JERRYXX_FUN(net_wifi_ap_mode) {
   JERRYXX_CHECK_ARG(0, "apInfo");
   JERRYXX_CHECK_ARG_FUNCTION_OPT(1, "callback");
+  jerry_value_t result;
   jerry_value_t ap_info = JERRYXX_GET_ARG(0);
-  jerry_size_t len;
-  uint8_t *pw_str = NULL;
-  uint8_t *str_buffer = NULL;
-  ip4_addr_t gw, mask;
 
   // validate SSID
   jerry_value_t ssid = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_SSID);
-  if (jerry_value_is_string(ssid)) {
-    len = jerryxx_get_ascii_string_size(ssid);
-    if (len > 32) {
-      len = 32;
+  if (!jerry_value_is_string(ssid)) {
+    result = jerry_create_error(JERRY_ERROR_TYPE, (const jerry_char_t *)"SSID error");
+  }
+  else {
+    jerry_size_t len;
+    uint8_t* pw_str = NULL;
+    char* str_buffer = NULL;
+    ip_address_t gw, mask;
+
+    len = min(jerryxx_get_ascii_string_size(ssid), 32);
+
+    // validate password
+    jerry_value_t password = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_PASSWORD);
+    if (!jerry_value_is_string(password)) {
+      str_buffer = (char *)malloc(len + 1);
     }
-    jerryxx_string_to_ascii_char_buffer(
-        ssid, (uint8_t *)__cyw43_drv.current_ssid, len);
-    __cyw43_drv.current_ssid[len] = '\0';
-  } else {
+    else {
+      jerry_size_t pw_len = jerryxx_get_ascii_string_size(password);
+      str_buffer = (char *)malloc(len + 1 + pw_len + 1);
+      pw_str = (uint8_t*) &(str_buffer[len + 1]);
+      jerryxx_string_to_ascii_char_buffer(password, pw_str, pw_len);
+      pw_str[pw_len] = '\0';
+    }
+    jerry_release_value(password);
+
+    jerryxx_string_to_ascii_char_buffer(ssid, (uint8_t *)str_buffer, len);
+    str_buffer[len] = '\0';
     jerry_release_value(ssid);
-    return jerry_create_error(JERRY_ERROR_TYPE, (const jerry_char_t *)"SSID error");
-  }
-  jerry_release_value(ssid);
 
-  // validate password
-  jerry_value_t password = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_PASSWORD);
-  if (jerry_value_is_string(password)) {
-    len = jerryxx_get_ascii_string_size(password);
-    if (len < 8) {
-      jerry_release_value(password);
-      return jerry_create_error(JERRY_ERROR_COMMON, (const jerry_char_t *)"PASSWORD need to have at least 8 characters");
+    // validate Gateway
+    jerry_value_t gateway = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_GATEWAY);
+    if (jerry_value_is_string(gateway)) {
+      len = jerryxx_get_ascii_string_size(gateway);
+      char storage[16];
+      jerryxx_string_to_ascii_char_buffer(gateway, (uint8_t*) storage, sizeof(storage));
+      storage[sizeof(storage)-1] = '\0';
+      if (string_to_ip_address(storage, &gw) == false) {
+        result = jerry_create_error(JERRY_ERROR_COMMON, (const jerry_char_t *)"Can't decode Gateway IP Address");
+      }
+      else {
+        jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_GATEWAY, storage);
+      }
+    } 
+    else {
+      gw.ipv4.addr = 0xC0A80401;
+      SET_IPV4(gw);
+      jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_GATEWAY, "192.168.4.1");
     }
-    pw_str = (uint8_t *)malloc(len + 1);
-    jerryxx_string_to_ascii_char_buffer(password, pw_str, len);
-    pw_str[len] = '\0';
-  }
-  jerry_release_value(password);
+    jerry_release_value(gateway);
 
-  // validate Gateway
-  jerry_value_t gateway = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_GATEWAY);
-  if (jerry_value_is_string(gateway)) {
-    len = jerryxx_get_ascii_string_size(gateway);
-    str_buffer = (uint8_t *)malloc(len + 1);
-    jerryxx_string_to_ascii_char_buffer(gateway, str_buffer, len);
-    str_buffer[len] = '\0';
-    if (ipaddr_aton((const char *)str_buffer, &(gw)) == false) {
-      free(pw_str);
-      free(str_buffer);
-      jerry_release_value(gateway);
-      return jerry_create_error(JERRY_ERROR_COMMON,
-                                (const jerry_char_t *)"Can't decode Gateway IP Address");
+    // validate subnet mask
+    jerry_value_t subnet_mask = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_SUBNET_MASK);
+    if (jerry_value_is_string(subnet_mask)) {
+      len = jerryxx_get_ascii_string_size(subnet_mask);
+      char storage[16];
+      jerryxx_string_to_ascii_char_buffer(subnet_mask, (uint8_t*) storage, sizeof(storage));
+      storage[sizeof(storage)-1] = '\0';
+      if (string_to_ip_address(storage, &mask) == false) {
+        result = jerry_create_error(JERRY_ERROR_COMMON, (const jerry_char_t *)"Can't decode Subnet Mask");
+      }
+      else {
+        jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_SUBNET_MASK, storage);
+      }
+    } 
+    else {
+      mask.ipv4.addr = 0xFFFFFF00;
+      SET_IPV4(mask);
+      jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_SUBNET_MASK, "255.255.255.0");
     }
-    jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_GATEWAY,
-                                (char *)str_buffer);
-  } else {
-    IP4_ADDR(&gw, 192, 168, 4, 1);
-    jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_GATEWAY,
-                                "192.168.4.1");
-  }
-  free(str_buffer);
-  jerry_release_value(gateway);
+    jerry_release_value(subnet_mask);
 
-  // validate subnet mask
-  jerry_value_t subnet_mask = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_SUBNET_MASK);
-  if (jerry_value_is_string(subnet_mask)) {
-    len = jerryxx_get_ascii_string_size(subnet_mask);
-    str_buffer = (uint8_t *)malloc(len + 1);
-    jerryxx_string_to_ascii_char_buffer(subnet_mask, str_buffer, len);
-    str_buffer[len] = '\0';
-    if (ipaddr_aton((const char *)str_buffer, &(mask)) == false) {
-      free(pw_str);
-      free(str_buffer);
-      jerry_release_value(subnet_mask);
-      return jerry_create_error(JERRY_ERROR_COMMON,
-                                (const jerry_char_t *)"Can't decode Subnet Mask");
+    if (wifi_access_point(str_buffer, (char*) pw_str, &gw, &mask) != 0) {
+      result = jerry_create_undefined();
     }
-    jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_SUBNET_MASK,
-                                (char *)str_buffer);
-  } else {
-    IP4_ADDR(&mask, 255, 255, 255, 0);
-    jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_SUBNET_MASK,
-                                "255.255.255.0");
-  }
-  free(str_buffer);
-  jerry_release_value(subnet_mask);
+    else {
+      result = jerry_create_undefined();
 
-  // init driver
-  if (__cyw43_init()) {
-    return jerry_create_error_from_value(create_system_error(EAGAIN), true);
-  }
-
-  cyw43_arch_enable_ap_mode((char *) __cyw43_drv.current_ssid, (char *) pw_str, CYW43_AUTH_WPA2_AES_PSK);
-  free(pw_str);
-  // start DHCP server
-	dhcp_server_init(&dhcp_server, &gw, &mask);
-
-  // call callback
-  if (JERRYXX_HAS_ARG(1)) {
-    jerry_value_t callback = JERRYXX_GET_ARG(1);
-    jerry_value_t js_cb = jerry_acquire_value(callback);
-    jerry_value_t errno = jerryxx_get_property_number(
-        JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
-    jerry_value_t this_val = jerry_create_undefined();
-    jerry_value_t args_p[1] = {errno};
-    jerry_call_function(js_cb, this_val, args_p, 1);
-    jerry_release_value(errno);
-    jerry_release_value(this_val);
-    jerry_release_value(js_cb);
+      if (JERRYXX_HAS_ARG(1)) {
+        // call callback
+        jerry_value_t callback = JERRYXX_GET_ARG(1);
+        jerry_value_t js_cb = jerry_acquire_value(callback);
+        jerry_value_t errno = jerryxx_get_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
+        jerry_value_t this_val = jerry_create_undefined();
+        jerry_value_t args_p[1] = {errno};
+        jerry_call_function(js_cb, this_val, args_p, 1);
+        jerry_release_value(errno);
+        jerry_release_value(this_val);
+        jerry_release_value(js_cb);
+      }
+    }
+    free(str_buffer);
+    jerry_release_value(ssid);
   }
 
-  return jerry_create_undefined();
+  return result;
 }
 
 JERRYXX_FUN(net_wifi_disable_ap_mode) {
-  // verify if AP_mode is enabled
-  int wifi_ap_status = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_AP);
-  if (wifi_ap_status != CYW43_LINK_UP) {
-    return jerry_create_error(JERRY_ERROR_COMMON,
-                              (const jerry_char_t *)"WiFi AP_mode is not enabled.");
-  }
 
-  // deinit DHCP server
-  dhcp_server_deinit(&dhcp_server);
-  cyw43_arch_deinit();
-  /* Reset and power up the WL chip */
-  cyw43_hal_pin_low(CYW43_PIN_WL_REG_ON);
-  cyw43_delay_ms(20);
-  cyw43_hal_pin_high(CYW43_PIN_WL_REG_ON);
-  cyw43_delay_ms(50);
-  __cyw43_drv.status_flag = KM_CYW43_STATUS_DISABLED;
-  // init the WiFi chip
-  if (__cyw43_init()) {
-    return jerry_create_error_from_value(create_system_error(EAGAIN), true);
-  }
+  wifi_access_point(NULL, NULL, NULL, NULL);
   return jerry_create_undefined();
 }
 
 // Function to get the MAC address of connected clients
 JERRYXX_FUN(net_wifi_ap_get_stas) {
-  // verify if AP_mode is enabled
-  int wifi_ap_status = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_AP);
-  if (wifi_ap_status != CYW43_LINK_UP) {
-    return jerry_create_error(JERRY_ERROR_COMMON,
-                              (const jerry_char_t *)"WiFi AP_mode is not enabled.");
-  }
+  const char* ssid;
+  const uint8_t* bssid;
 
-  int num_stas, max_stas, MAC_len = 18;
-  // get max stas
-  cyw43_wifi_ap_get_max_stas(&cyw43_state, &max_stas);
-  // declare
-  uint8_t *macs = (uint8_t*)malloc(num_stas * 6);
-  jerry_value_t MAC_array = jerry_create_array (num_stas);
-  //uint8_t macs[32 * 6];
-  cyw43_wifi_ap_get_stas(&cyw43_state, &num_stas, macs);
-  char **mac_strs = (char **)malloc(num_stas * sizeof(char *));
-  for (int i = 0; i < num_stas; i++) {
-    mac_strs[i] = (char *)malloc(MAC_len * sizeof(char));
-    sprintf(mac_strs[i], "%02x:%02x:%02x:%02x:%02x:%02x", macs[i*6], macs[i*6+1], macs[i*6+2], macs[i*6+3], macs[i*6+4], macs[i*6+5]);
+  wifi_status(&ssid, &bssid);
+  jerry_value_t MAC_array = jerry_create_array (1);
+  for (int i = 0; i < 1; i++) {
+    char macAddress[20];
+    
+    bytes_to_string(bssid, 6, macAddress);
+
     // add to the array
-    jerry_value_t prop = jerry_create_string((const jerry_char_t *)mac_strs[i]);
+    jerry_value_t prop = jerry_create_string((const jerry_char_t *)macAddress);
     jerry_release_value(jerry_set_property_by_index(MAC_array, i, prop));
     jerry_release_value(prop);
   }
-  // deallocate memory
-  free(macs);
+
   // return the list of macs
   return MAC_array;
 }
 
-jerry_value_t module_net_init() {
-  /* PICO_CYW43 class */
-  jerry_value_t net_ctor =
-      jerry_create_external_function(net_ctor_fn);
-  jerry_value_t prototype = jerry_create_object();
-  jerryxx_set_property(net_ctor, "prototype", prototype);
-  jerryxx_set_property_function(prototype, MSTR_NET_GETGPIO,
-                                net_get_gpio);
-  jerryxx_set_property_function(prototype, MSTR_NET_PUTGPIO,
-                                net_put_gpio);
-  jerry_release_value(prototype);
+jerry_value_t wifi_initialize() {
+  wifi_callbacks.callback_report = wifi_report_implementation;
+  wifi_callbacks.callback_link = wifi_link_implementation;
 
+  /* net wifi class */
   jerry_value_t net_wifi_ctor =
       jerry_create_external_function(net_wifi_ctor_fn);
   jerry_value_t wifi_prototype = jerry_create_object();
@@ -543,46 +634,16 @@ jerry_value_t module_net_init() {
   jerryxx_set_property_function(wifi_prototype,
                                 MSTR_NET_WIFI_APMODE_DISABLE_FN,
                                 net_wifi_disable_ap_mode);
+  // jerryxx_set_property_function(wifi_prototype, MSTR_NET_GETGPIO,
+  //                              net_get_gpio);
+  // jerryxx_set_property_function(wifi_prototype, MSTR_NET_PUTGPIO,
+  //                              net_put_gpio);
   jerry_release_value(wifi_prototype);
-
-  jerry_value_t net_network_ctor =
-      jerry_create_external_function(net_network_ctor_fn);
-  jerry_value_t network_prototype = jerry_create_object();
-  jerryxx_set_property(net_network_ctor, "prototype", network_prototype);
-  jerryxx_set_property_function(network_prototype,
-                                MSTR_NET_NETWORK_SOCKET,
-                                net_network_socket);
-  jerryxx_set_property_function(network_prototype, MSTR_NET_NETWORK_GET,
-                                net_network_get);
-  jerryxx_set_property_function(network_prototype,
-                                MSTR_NET_NETWORK_CONNECT,
-                                net_network_connect);
-  jerryxx_set_property_function(network_prototype,
-                                MSTR_NET_NETWORK_WRITE,
-                                net_network_write);
-  jerryxx_set_property_function(network_prototype,
-                                MSTR_NET_NETWORK_CLOSE,
-                                net_network_close);
-  jerryxx_set_property_function(network_prototype,
-                                MSTR_NET_NETWORK_SHUTDOWN,
-                                net_network_shutdown);
-  jerryxx_set_property_function(network_prototype, MSTR_NET_NETWORK_BIND,
-                                net_network_bind);
-  jerryxx_set_property_function(network_prototype,
-                                MSTR_NET_NETWORK_LISTEN,
-                                net_network_listen);
-  jerry_release_value(network_prototype);
 
   /* pico_cyw43 module exports */
   jerry_value_t exports = jerry_create_object();
-  jerryxx_set_property(exports, MSTR_NET_PICO_CYW43, net_ctor);
-  jerryxx_set_property(exports, MSTR_NET_PICO_CYW43_WIFI,
-                       net_wifi_ctor);
-  jerryxx_set_property(exports, MSTR_NET_PICO_CYW43_NETWORK,
-                       net_network_ctor);
-  jerry_release_value(net_ctor);
+  jerryxx_set_property(exports, MSTR_NET_WIFI, net_wifi_ctor);
   jerry_release_value(net_wifi_ctor);
-  jerry_release_value(net_network_ctor);
 
   return exports;
 }

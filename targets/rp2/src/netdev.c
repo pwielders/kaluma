@@ -12,9 +12,6 @@
 #include <dhcpserver.h>
 
 #define MAX_GPIO_NUM     2
-#define SCAN_TIMEOUT     2 /* 2 sec */
-#define DNS_TIMEOUT      4 /* 4 sec */
-#define CONNECT_TIMEOUT 30 /* 30 sec */
 
 typedef enum {
   NET_SOCKET_STATE_CLOSED    = 0x00,
@@ -97,8 +94,10 @@ static err_t tcp_received_cb(void* arg, struct tcp_pcb* tpcb, struct pbuf* p, er
         tcp_recved(tpcb, p->tot_len);
       }
       if(socket_callbacks.callback_received != NULL) {
-        const struct ip_addr_t* address = (struct ip_addr_t*) &(info->addr);
-        socket_callbacks.callback_received(index, p->tot_len, buffer, address, info->port);
+        ip_address_t address;
+        address.ipv4.addr = info->addr.addr;
+        SET_IPV4(address);
+        socket_callbacks.callback_received(index, p->tot_len, buffer, &address, info->port);
       }
       free(buffer);
     }
@@ -131,8 +130,10 @@ static void udp_received_cb(void *arg, struct udp_pcb *upcb, struct pbuf *p,
         offset += q->len;
       }
       if(socket_callbacks.callback_received != NULL) {
-        const struct ip_addr_t* address = (struct ip_addr_t*) addr;
-        socket_callbacks.callback_received(index, p->tot_len, buffer, address, port);
+        ip_address_t address;
+        address.ipv4.addr = addr->addr;
+        SET_IPV4(address);
+        socket_callbacks.callback_received(index, p->tot_len, buffer, &address, port);
       }
       free(buffer);
     }
@@ -264,10 +265,10 @@ static uint8_t allocate_fd(const socket_state state, void* pcb) {
   return result;
 }
 
-int socket_resolve(const uint8_t timeout, const char* name, struct ip_addr_t* address) {
+int socket_resolve(const uint8_t timeout, const char* name, ip_address_t* address) {
   int result = ERR_INPROGRESS;
 
-  ip_addr_t* ipv4 = (ip_addr_t*)address;
+  ip_addr_t ipv4;
 
   cyw43_arch_lwip_begin();
 
@@ -277,8 +278,8 @@ int socket_resolve(const uint8_t timeout, const char* name, struct ip_addr_t* ad
 
     cyw43_arch_lwip_end();
 
-    result = dns_gethostbyname_addrtype(name, ipv4,
-                                         dns_found_cb, ipv4,
+    result = dns_gethostbyname_addrtype(name, &ipv4,
+                                         dns_found_cb, &ipv4,
                                          LWIP_DNS_ADDRTYPE_IPV4);
 
     if (result == ERR_INPROGRESS) {
@@ -295,7 +296,9 @@ int socket_resolve(const uint8_t timeout, const char* name, struct ip_addr_t* ad
         slots--;
       }
 
-      if (ip4_addr_get_u32(ipv4) != 0) {
+      if (ip4_addr_get_u32(&ipv4) != 0) {
+        address->ipv4.addr = ipv4.addr;
+        SET_IPV4(*address);
         result = ERR_OK;
       }
     }
@@ -320,24 +323,30 @@ int8_t socket_datagram() {
   return (entry < KALUMA_MAX_SOCKETS ? entry : -1);
 }
 
-int socket_bind (const uint8_t fd, const struct ip_addr_t* address, const uint16_t port) {
+int socket_bind (const uint8_t fd, const ip_address_t* address, const uint16_t port) {
   int err = -1; 
 
-  const ip_addr_t* ipv4 = (const ip_addr_t*) address;
+  ip_addr_t ipv4;
+  #if LWIP_IPV4 && LWIP_IPV6
+  ipv4.ip4.addr = address->ipv4.addr;
+  ipv4.type = 0;
+  #else
+  ipv4.addr = address->ipv4.addr;
+  #endif
 
   cyw43_arch_lwip_begin();
 
   if ((__socket_info[fd].state & socket_type_mask) == NET_SOCKET_STREAM) {
     __socket_info[fd].port = port;
-    __socket_info[fd].addr = *ipv4;
+    __socket_info[fd].addr = ipv4;
     __socket_info[fd].state |= NET_SOCKET_STATE_BIND;
     err = tcp_bind(__socket_info[fd].tcp_pcb, NULL, port);
   } 
   else if ((__socket_info[fd].state & socket_type_mask) == NET_SOCKET_DGRAM) {
     __socket_info[fd].port = port;
-    __socket_info[fd].addr = *ipv4;
+    __socket_info[fd].addr = ipv4;
     __socket_info[fd].state |= NET_SOCKET_STATE_BIND;
-    err = udp_bind(__socket_info[fd].udp_pcb, ipv4, port);
+    err = udp_bind(__socket_info[fd].udp_pcb, &ipv4, port);
   }
   cyw43_arch_lwip_end();
 
@@ -574,7 +583,7 @@ void wifi_status(const char** ssid, const uint8_t* bssid[6]) {
   }
 }
 
-int wifi_connect(const char* ssid, const uint8_t* bssid, const wifi_authentication auth_mode, const char* password) {
+int wifi_connect(const uint8_t seconds, const char* ssid, const uint8_t* bssid, const wifi_authentication auth_mode, const char* password) {
   cyw43_authentication auth = CYW43_AUTH_OPEN;
 
   if (auth_mode == WIFI_AUTH_WPA2) {
@@ -603,11 +612,11 @@ int wifi_connect(const char* ssid, const uint8_t* bssid, const wifi_authenticati
     memcpy(__cyw43_drv.bssid, bssid, sizeof(__cyw43_drv.bssid));
   }
 
-  int result = cyw43_arch_wifi_connect_bssid_timeout_ms(ssid, bssid, password, auth, CONNECT_TIMEOUT);
+  int result = cyw43_arch_wifi_connect_bssid_timeout_ms(ssid, bssid, password, auth, seconds * 1000);
 
   if (result == ERR_OK) {
     if (wifi_callbacks.callback_link != NULL) {
-      wifi_callbacks.callback_link(__cyw43_drv.ssid, true);
+      wifi_callbacks.callback_link(__cyw43_drv.ssid, __cyw43_drv.bssid, true);
     }
   }
 
@@ -618,14 +627,14 @@ int wifi_disconnect() {
   int result = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);
   if (result == 0) {
     if (wifi_callbacks.callback_link != NULL) {
-      wifi_callbacks.callback_link(__cyw43_drv.ssid, false);
+      wifi_callbacks.callback_link(__cyw43_drv.ssid, __cyw43_drv.bssid, false);
     }
     __cyw43_drv.ssid[0] = '\0';
   }
   return (result);
 }
 
-int wifi_access_point(const char* ssid, const char* passwd, const struct ip_addr_t* gw, const uint8_t mask)  {
+int wifi_access_point(const char* ssid, const char* passwd, const ip_address_t* gw, const ip_address_t* mask)  {
   int result = -1;
 
   if (cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_AP) == CYW43_LINK_UP) {
@@ -634,10 +643,24 @@ int wifi_access_point(const char* ssid, const char* passwd, const struct ip_addr
       if ((__cyw43_status & CYW43_STATUS_ACCESSPOINT) == 0) {
         cyw43_arch_enable_ap_mode(ssid, passwd, CYW43_AUTH_WPA2_AES_PSK);
 
-        uint32_t real_mask = (0xFFFFFFFF < (32 - mask));
+        ip_addr_t real_gw;
+        #if LWIP_IPV4 && LWIP_IPV6
+        real_gw.ip4.addr = gw->ipv4.addr;
+        real_gw.type = 0;
+        #else
+        real_gw.addr = gw->ipv4.addr;
+        #endif
+
+        ip_addr_t real_mask;
+        #if LWIP_IPV4 && LWIP_IPV6
+        real_mask.ip4.addr = mask->ipv4.addr;
+        real_mask.type = 0;
+        #else
+        real_mask.addr = mask->ipv4.addr;
+        #endif
 
         // start DHCP server
-	dhcp_server_init(&__dhcp_server, (ip_addr_t*) gw, (ip_addr_t*) &real_mask);
+	dhcp_server_init(&__dhcp_server, &real_gw, &real_mask);
     
         cyw43_arch_lwip_begin();
         __cyw43_status |= CYW43_STATUS_ACCESSPOINT;

@@ -737,3 +737,41 @@ JERRYXX_FUN(net_network_listen) {
   }
   return jerry_create_undefined();
 }
+
+jerry_value_t module_net_init() {
+  jerry_value_t net_network_ctor =
+      jerry_create_external_function(net_network_ctor_fn);
+  jerry_value_t network_prototype = jerry_create_object();
+  jerryxx_set_property(net_network_ctor, "prototype", network_prototype);
+  jerryxx_set_property_function(network_prototype,
+                                MSTR_NET_NETWORK_SOCKET,
+                                net_network_socket);
+  jerryxx_set_property_function(network_prototype, MSTR_NET_NETWORK_GET,
+                                net_network_get);
+  jerryxx_set_property_function(network_prototype,
+                                MSTR_NET_NETWORK_CONNECT,
+                                net_network_connect);
+  jerryxx_set_property_function(network_prototype,
+                                MSTR_NET_NETWORK_WRITE,
+                                net_network_write);
+  jerryxx_set_property_function(network_prototype,
+                                MSTR_NET_NETWORK_CLOSE,
+                                net_network_close);
+  jerryxx_set_property_function(network_prototype,
+                                MSTR_NET_NETWORK_SHUTDOWN,
+                                net_network_shutdown);
+  jerryxx_set_property_function(network_prototype, MSTR_NET_NETWORK_BIND,
+                                net_network_bind);
+  jerryxx_set_property_function(network_prototype,
+                                MSTR_NET_NETWORK_LISTEN,
+                                net_network_listen);
+  jerry_release_value(network_prototype);
+
+  /* pico_cyw43 module exports */
+  jerry_value_t exports = jerry_create_object();
+  jerryxx_set_property(exports, MSTR_NET_PICO_CYW43_NETWORK,
+                       net_network_ctor);
+  jerry_release_value(net_network_ctor);
+
+  return exports;
+}

@@ -23,6 +23,7 @@
 #define __NET_MAGIC_STRINGS_H
 
 #define MSTR_NET_NET "net"
+#define MSTR_NET_WIFI "wifi"
 #define MSTR_NET_CREATE_CONNECTION "createConnection"
 #define MSTR_NET_CONNECT "connect"
 #define MSTR_NET_CREATE_SERVER "createServer"
@@ -55,6 +56,24 @@
 #define MSTR_NET_WIFI_DISCONNECT "disconnect"
 #define MSTR_NET_WIFI_GET_CONNECTION "get_connection"
 
+#define MSTR_NET_WIFI_SCANINFO_BSSID "bssid"
+#define MSTR_NET_WIFI_SCANINFO_SSID "ssid"
+#define MSTR_NET_WIFI_SCANINFO_SECURITY "security"
+#define MSTR_NET_WIFI_SCANINFO_RSSI "rssi"
+#define MSTR_NET_WIFI_SCANINFO_CHANNEL "channel"
+
+/* AP_mode strings */
+#define MSTR_NET_WIFI_APMODE_FN "ap_mode"
+#define MSTR_NET_WIFI_APMODE_DISABLE_FN "disable_ap_mode"
+
+#define MSTR_NET_WIFI_APMODE_SSID "ssid"
+#define MSTR_NET_WIFI_APMODE_PASSWORD "password"
+#define MSTR_NET_WIFI_APMODE_GATEWAY "gateway"
+#define MSTR_NET_WIFI_APMODE_SUBNET_MASK "subnet_mask"
+#define MSTR_NET_WIFI_APMODE_GET_STAS_FN "get_clients"
+
+#define MSTR_NET_WIFI_PASSWORD "password"
+#
 #endif /* __NET_MAGIC_STRINGS_H */
 
 #if 0
@@ -77,12 +96,6 @@
 #define MSTR_NET_NETWORK_BIND "bind"
 #define MSTR_NET_NETWORK_LISTEN "listen"
 
-#define MSTR_NET_SCANINFO_BSSID "bssid"
-#define MSTR_NET_SCANINFO_SSID "ssid"
-#define MSTR_NET_SCANINFO_SECURITY "security"
-#define MSTR_NET_SCANINFO_RSSI "rssi"
-#define MSTR_NET_SCANINFO_CHANNEL "channel"
-
 #define MSTR_NET_SOCKET_FD "fd"
 #define MSTR_NET_SOCKET_PTCL "ptcl"
 #define MSTR_NET_SOCKET_STATE "state"
@@ -96,15 +109,4 @@
 #define MSTR_NET_SOCKET_ACCEPT_CB "accept_cb"
 #define MSTR_NET_SOCKET_SHUTDOWN_CB "shutdown_cb"
 
-/* AP_mode strings */
-#define MSTR_NET_WIFI_APMODE_FN "ap_mode"
-#define MSTR_NET_WIFI_APMODE_DISABLE_FN "disable_ap_mode"
-
-#define MSTR_NET_WIFI_APMODE_SSID "ssid"
-#define MSTR_NET_WIFI_APMODE_PASSWORD "password"
-#define MSTR_NET_WIFI_APMODE_GATEWAY "gateway"
-#define MSTR_NET_WIFI_APMODE_SUBNET_MASK "subnet_mask"
-#define MSTR_NET_WIFI_APMODE_GET_STAS_FN "get_clients"
-
-#define MSTR_NET_PASSWORD "password"
 #endif 
