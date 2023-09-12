@@ -20,7 +20,7 @@
  */
 
 #include <stdlib.h>
-#include <port/netdev.h>
+#include <port/net.h>
 #include <string.h>
 
 #include "err.h"

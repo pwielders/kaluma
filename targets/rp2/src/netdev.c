@@ -7,7 +7,8 @@
 #include <lwip/udp.h>
 #include <lwip/dns.h>
 
-#include <port/netdev.h>
+#include <port/net.h>
+#include <port/wifi.h>
 
 #include <dhcpserver.h>
 

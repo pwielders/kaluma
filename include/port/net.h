@@ -42,15 +42,6 @@ typedef struct {
 #define SET_IPV6(address) 
 #endif
 
-typedef enum {
-  WIFI_AUTH_UNKNOWN,
-  WIFI_AUTH_OPEN,
-  WIFI_AUTH_WEP_PSK,
-  WIFI_AUTH_WPA,
-  WIFI_AUTH_WPA2,
-  WIFI_AUTH_WPA2_PSK
-} wifi_authentication;
-
 int8_t socket_stream();
 int8_t socket_datagram();
 

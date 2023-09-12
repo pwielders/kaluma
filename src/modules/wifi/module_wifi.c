@@ -20,7 +20,7 @@
  */
 
 #include <stdlib.h>
-#include <port/netdev.h>
+#include <port/wifi.h>
 #include <string.h>
 #include <ctype.h>
 
@@ -28,8 +28,8 @@
 #include "jerryscript.h"
 #include "jerryxx.h"
 #include "system.h"
-#include "net_magic_strings.h"
-#include "module_tools.h"
+#include "wifi_magic_strings.h"
+#include "../net/module_tools.h"
 
 #define WIFI_CONNECT_TIMEOUT    20
 #define WIFI_SCAN_TIMEOUT       10

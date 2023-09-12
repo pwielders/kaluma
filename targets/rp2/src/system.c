@@ -41,7 +41,6 @@
 #include "tusb.h"
 #include "uart.h"
 #ifdef PICO_CYW43
-#include "module_pico_cyw43.h"
 #include <pico/cyw43_arch.h>
 #endif /* PICO_CYW43 */
 
@@ -107,9 +106,6 @@ void km_system_init() {
 }
 
 void km_system_cleanup() {
-#ifdef PICO_CYW43
-  km_cyw43_deinit();
-#endif /* PICO_CYW43 */
   km_pio_cleanup();
   km_adc_cleanup();
   km_pwm_cleanup();

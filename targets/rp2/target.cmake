@@ -77,7 +77,7 @@ set(SOURCES
   ${CMAKE_SOURCE_DIR}/lib/dhcpserver/dhcpserver.c
   ${BOARD_DIR}/board.c)
 
-include_directories(${TARGET_INC_DIR} ${BOARD_DIR})
+include_directories(${TARGET_INC_DIR} ${BOARD_DIR} ${CMAKE_SOURCE_DIR}/lib/dhcpserver)
 
 set(TARGET_HEAPSIZE 180)
 set(JERRY_TOOLCHAIN toolchain_mcu_cortexm0plus.cmake)
@@ -112,9 +112,9 @@ set(CMAKE_EXE_LINKER_FLAGS "-specs=nano.specs -u _printf_float -Wl,-Map=${OUTPUT
 # For the pico-w board
 if(BOARD STREQUAL "pico-w")
   # modules for pico-w
-  set(MODULES
-  ${MODULES}
-  pico_cyw43)
+  # set(MODULES
+  #${MODULES}
+  #pico_cyw43)
   # libs for pico-w
   set(TARGET_LIBS
   ${TARGET_LIBS}
