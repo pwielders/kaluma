@@ -23,7 +23,7 @@
 #define __NET_MAGIC_STRINGS_H
 
 #define MSTR_NET_NET "net"
-#define MSTR_NET_WIFI "wifi"
+#define MSTR_NET_SOCKET "socket"
 
 #define MSTR_NET_NETWORK_ERRNO "errno"
 #define MSTR_NET_NETWORK_MAC "mac"
@@ -50,42 +50,4 @@
 #define MSTR_NET_SOCKET_ACCEPT_CB "accept_cb"
 #define MSTR_NET_SOCKET_SHUTDOWN_CB "shutdown_cb"
 
-#define MSTR_NET_WIFI_ERRNO "errno"
-#define MSTR_NET_WIFI_ASSOC_CB "assoc_cb"
-#define MSTR_NET_WIFI_CONNECT_CB "connect_cb"
-#define MSTR_NET_WIFI_DISCONNECT_CB "disconnect_cb"
-#define MSTR_NET_WIFI_RESET "reset"
-#define MSTR_NET_WIFI_SCAN "scan"
-#define MSTR_NET_WIFI_CONNECT "connect"
-#define MSTR_NET_WIFI_DISCONNECT "disconnect"
-#define MSTR_NET_WIFI_GET_CONNECTION "get_connection"
-
-#define MSTR_NET_WIFI_SCANINFO_BSSID "bssid"
-#define MSTR_NET_WIFI_SCANINFO_SSID "ssid"
-#define MSTR_NET_WIFI_SCANINFO_SECURITY "security"
-#define MSTR_NET_WIFI_SCANINFO_RSSI "rssi"
-#define MSTR_NET_WIFI_SCANINFO_CHANNEL "channel"
-
-/* AP_mode strings */
-#define MSTR_NET_WIFI_APMODE_FN "ap_mode"
-#define MSTR_NET_WIFI_APMODE_DISABLE_FN "disable_ap_mode"
-
-#define MSTR_NET_WIFI_APMODE_SSID "ssid"
-#define MSTR_NET_WIFI_APMODE_PASSWORD "password"
-#define MSTR_NET_WIFI_APMODE_GATEWAY "gateway"
-#define MSTR_NET_WIFI_APMODE_SUBNET_MASK "subnet_mask"
-#define MSTR_NET_WIFI_APMODE_GET_STAS_FN "get_clients"
-
-#define MSTR_NET_WIFI_PASSWORD "password"
-#
 #endif /* __NET_MAGIC_STRINGS_H */
-
-#if 0
-
-#define MSTR_NET_PICO_CYW43 "PicoCYW43"
-#define MSTR_NET_GETGPIO "getGpio"
-#define MSTR_NET_PUTGPIO "putGpio"
-
-#define MSTR_NET_PICO_CYW43_WIFI "PicoCYW43WIFI"
-#define MSTR_NET_PICO_CYW43_NETWORK "PicoCYW43Network"
-#endif 

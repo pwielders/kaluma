@@ -22,16 +22,39 @@
 #ifndef __WIFI_MAGIC_STRINGS_H
 #define __WIFI_MAGIC_STRINGS_H
 
-#define MSTR_WIFI_WIFI "wifi"
-#define MSTR_WIFI_WIFI_ "WiFi"
+#define MSTR_WIFI "wifi"
+#define MSTR_WIFI_ "WiFi"
 #define MSTR_WIFI__dev "_dev"
 #define MSTR_WIFI_ASSOCIATED "associated"
 #define MSTR_WIFI_CONNECTED "connected"
 #define MSTR_WIFI_DISCONNECTED "disconnected"
+
+#define MSTR_WIFI_ERRNO "errno"
+#define MSTR_WIFI_ASSOC_CB "assoc_cb"
+#define MSTR_WIFI_CONNECT_CB "connect_cb"
+#define MSTR_WIFI_DISCONNECT_CB "disconnect_cb"
 #define MSTR_WIFI_RESET "reset"
 #define MSTR_WIFI_SCAN "scan"
 #define MSTR_WIFI_CONNECT "connect"
 #define MSTR_WIFI_DISCONNECT "disconnect"
 #define MSTR_WIFI_GET_CONNECTION "get_connection"
+
+#define MSTR_WIFI_SCANINFO_BSSID "bssid"
+#define MSTR_WIFI_SCANINFO_SSID "ssid"
+#define MSTR_WIFI_SCANINFO_SECURITY "security"
+#define MSTR_WIFI_SCANINFO_RSSI "rssi"
+#define MSTR_WIFI_SCANINFO_CHANNEL "channel"
+
+/* AP_mode strings */
+#define MSTR_WIFI_APMODE_FN "ap_mode"
+#define MSTR_WIFI_APMODE_DISABLE_FN "disable_ap_mode"
+
+#define MSTR_WIFI_APMODE_SSID "ssid"
+#define MSTR_WIFI_APMODE_PASSWORD "password"
+#define MSTR_WIFI_APMODE_GATEWAY "gateway"
+#define MSTR_WIFI_APMODE_SUBNET_MASK "subnet_mask"
+#define MSTR_WIFI_APMODE_GET_STAS_FN "get_clients"
+
+#define MSTR_WIFI_PASSWORD "password"
 
 #endif /* __WIFI_MAGIC_STRINGS_H */

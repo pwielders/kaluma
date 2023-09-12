@@ -30,6 +30,8 @@
 #include "net_magic_strings.h"
 #include "module_tools.h" 
 
+#define DNS_RESOLVE_TIMEOUT 10
+
 typedef struct {
   uint8_t fd;
   jerry_value_t obj;
@@ -70,7 +72,7 @@ void socket_accepted_implementation (const uint8_t fd, const uint8_t accepted) {
     socket_map[accepted].obj = jerry_create_object();
     jerryxx_set_property_number(socket_map[accepted].obj, MSTR_NET_SOCKET_FD, accepted);
     jerryxx_set_property_string(socket_map[accepted].obj, MSTR_NET_SOCKET_PTCL, "STREAM");
-    jerryxx_set_property_string(socket_map[accepted].obj, MSTR_NET_SOCKET_STATE, "INITIALIZED");
+    jerryxx_set_property_string(socket_map[accepted].obj, MSTR_NET_SOCKET_STATE, "CONNECTED");
     jerryxx_set_property_string(socket_map[accepted].obj, MSTR_NET_SOCKET_LADDR, "0.0.0.0");
     jerryxx_set_property_string(socket_map[accepted].obj, MSTR_NET_SOCKET_LPORT, "0");
     jerryxx_set_property_string(socket_map[accepted].obj, MSTR_NET_SOCKET_RADDR, "0.0.0.0");
@@ -90,6 +92,7 @@ void socket_accepted_implementation (const uint8_t fd, const uint8_t accepted) {
 
 void socket_closed_implementation (const uint8_t fd) {
   if ((fd < KALUMA_MAX_SOCKETS) && (socket_map[fd].fd < KALUMA_MAX_SOCKETS)) {
+    jerryxx_set_property_string(socket_map[fd].obj, MSTR_NET_SOCKET_STATE, "CLOSED");
     jerry_value_t callback = jerryxx_get_property(socket_map[fd].obj, MSTR_NET_SOCKET_CLOSE_CB);
     if (jerry_value_is_function(callback)) {
       jerry_value_t this_val = jerry_create_undefined();
@@ -98,7 +101,6 @@ void socket_closed_implementation (const uint8_t fd) {
     }
     socket_map[fd].fd = KALUMA_MAX_SOCKETS;
     jerry_release_value(callback);
-    jerry_release_value(socket_map[fd].obj);
   } 
 }
 
@@ -108,6 +110,8 @@ JERRYXX_FUN(net_network_ctor_fn) {
 }
 
 JERRYXX_FUN(net_network_socket) {
+  int8_t fd;
+
   JERRYXX_CHECK_ARG_STRING(0, "domain");
   JERRYXX_CHECK_ARG_STRING(1, "protocol");
   JERRYXX_GET_ARG_STRING_AS_CHAR(0, domain);
@@ -117,8 +121,7 @@ JERRYXX_FUN(net_network_socket) {
     return jerry_create_error( JERRY_ERROR_TYPE, (const jerry_char_t *)"un-supported domain or protocol.");
   } 
   else {
-    const char* socket_type;
-    int8_t fd;
+    char* socket_type;
     if (strcmp(protocol, "STREAM")) {
       fd = socket_stream();
       socket_type = "STREAM";
@@ -134,15 +137,17 @@ JERRYXX_FUN(net_network_socket) {
       socket_map[fd].fd = fd;
       socket_map[fd].obj = jerry_create_object();
       uint8_t mac_addr[6];
-      char* storage[20];
+      char storage[20];
       memset(mac_addr, 0, 6);
 
+      bytes_to_string(mac_addr, 6, storage);
+
       jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_NETWORK_MAC, storage);
-      jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_NETWORK_IP, "0.0.0.0);
+      jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_NETWORK_IP, "0.0.0.0");
 
       jerryxx_set_property_number(socket_map[fd].obj, MSTR_NET_SOCKET_FD, fd);
       jerryxx_set_property_string(socket_map[fd].obj, MSTR_NET_SOCKET_PTCL, socket_type);
-      jerryxx_set_property_number(socket_map[fd].obj, MSTR_NET_SOCKET_STATE, __socket_info.socket[fd].state);
+      jerryxx_set_property_string(socket_map[fd].obj, MSTR_NET_SOCKET_STATE, "INITIALIZED");
       jerryxx_set_property_string(socket_map[fd].obj, MSTR_NET_SOCKET_LADDR, "0.0.0.0");
       jerryxx_set_property_number(socket_map[fd].obj, MSTR_NET_SOCKET_LPORT, 0);
       jerryxx_set_property_string(socket_map[fd].obj, MSTR_NET_SOCKET_RADDR, "0.0.0.0");
@@ -286,7 +291,7 @@ JERRYXX_FUN(net_network_shutdown) {
   int8_t fd = JERRYXX_GET_ARG_NUMBER(0);
 
   if ( (fd < 0) || (fd >= KALUMA_MAX_SOCKETS) || (socket_map[fd].fd >= KALUMA_MAX_SOCKETS) ) {
-    int8_t how = JERRYXX_GET_ARG_NUMBER(1);
+    //int8_t how = JERRYXX_GET_ARG_NUMBER(1);
 
     //if (socket_shutdown(fd, how) < 0) {
     //  jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_NETWORK_ERRNO, -1);
@@ -395,7 +400,7 @@ JERRYXX_FUN(net_network_listen) {
 jerry_value_t module_net_init() {
   for (int i = 0; i < KALUMA_MAX_SOCKETS; i++) {
     socket_map[i].fd = ~0;
-    socket_map[i].obj = NULL;
+    socket_map[i].obj = 0;
   }
 
   socket_callbacks.callback_connected = socket_connected_implementation;
@@ -432,7 +437,7 @@ jerry_value_t module_net_init() {
 
   /* pico_cyw43 module exports */
   jerry_value_t exports = jerry_create_object();
-  jerryxx_set_property(exports, MSTR_NET_PICO_CYW43_NETWORK,
+  jerryxx_set_property(exports, MSTR_NET_SOCKET,
                        net_network_ctor);
   jerry_release_value(net_network_ctor);
 

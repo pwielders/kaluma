@@ -85,24 +85,24 @@ static void wifi_link_implementation (const char* ssid, const uint8_t bssid[6], 
 }
 
 JERRYXX_FUN(net_wifi_ctor_fn) {
-  jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
+  jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, 0);
   return jerry_create_undefined();
 }
 
 JERRYXX_FUN(net_wifi_reset) {
   JERRYXX_CHECK_ARG_FUNCTION_OPT(0, "callback");
   if (wifi_reset()) {
-    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO,
+    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO,
                                 -1);
   } else {
-    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO,
+    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO,
                                 0);
   }
   if (JERRYXX_HAS_ARG(0)) {
     jerry_value_t callback = JERRYXX_GET_ARG(0);
     jerry_value_t reset_js_cb = jerry_acquire_value(callback);
     jerry_value_t errno = jerryxx_get_property_number(
-        JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
+        JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, 0);
     jerry_value_t this_val = jerry_create_undefined();
     jerry_value_t args_p[1] = {errno};
     jerry_call_function(reset_js_cb, this_val, args_p, 1);
@@ -120,17 +120,17 @@ JERRYXX_FUN(net_wifi_scan) {
     jerry_value_t scan_js_cb = jerry_acquire_value(callback);
     int ret = wifi_scan(WIFI_SCAN_TIMEOUT);
     if (ret < 0) {
-      jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO,
+      jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO,
                                   -1);
       jerry_value_t errno = jerryxx_get_property_number(
-          JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, -1);
+          JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, -1);
       jerry_value_t this_val = jerry_create_undefined();
       jerry_value_t args_p[1] = {errno};
       jerry_call_function(scan_js_cb, this_val, args_p, 1);
       jerry_release_value(errno);
       jerry_release_value(this_val);
     } else {
-      jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO,
+      jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO,
                                   0);
 
       uint8_t index = 0;
@@ -150,10 +150,10 @@ JERRYXX_FUN(net_wifi_scan) {
       while (current) {
         jerry_value_t obj = jerry_create_object();
 
-        jerryxx_set_property_string(obj, MSTR_NET_WIFI_SCANINFO_SSID, current->info.ssid);
+        jerryxx_set_property_string(obj, MSTR_WIFI_SCANINFO_SSID, current->info.ssid);
 
         bytes_to_string(current->info.bssid, 6, buffer);
-        jerryxx_set_property_string(obj, MSTR_NET_WIFI_SCANINFO_BSSID, buffer);
+        jerryxx_set_property_string(obj, MSTR_WIFI_SCANINFO_BSSID, buffer);
 
         if ((current->auth_mode & (WIFI_AUTH_WPA | WIFI_AUTH_WPA2)) == (WIFI_AUTH_WPA | WIFI_AUTH_WPA2)) {
           selected = "WPA2_WPA_PSK";
@@ -168,9 +168,9 @@ JERRYXX_FUN(net_wifi_scan) {
         } else {
           selected = "-"; // Unknown
         }
-        jerryxx_set_property_string(obj, MSTR_NET_WIFI_SCANINFO_SECURITY, selected);
-        jerryxx_set_property_number(obj, MSTR_NET_WIFI_SCANINFO_RSSI, current->rssi);
-        jerryxx_set_property_number(obj, MSTR_NET_WIFI_SCANINFO_CHANNEL, current->channel);
+        jerryxx_set_property_string(obj, MSTR_WIFI_SCANINFO_SECURITY, selected);
+        jerryxx_set_property_number(obj, MSTR_WIFI_SCANINFO_RSSI, current->rssi);
+        jerryxx_set_property_number(obj, MSTR_WIFI_SCANINFO_CHANNEL, current->channel);
         jerry_value_t ret = jerry_set_property_by_index(scan_array, index++, obj);
         jerry_release_value(ret);
         jerry_release_value(obj);
@@ -178,7 +178,7 @@ JERRYXX_FUN(net_wifi_scan) {
         current = current->next;
         free(remove);
       }
-      jerry_value_t errno = jerryxx_get_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
+      jerry_value_t errno = jerryxx_get_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, 0);
       jerry_value_t this_val = jerry_create_undefined();
       jerry_value_t args_p[2] = {errno, scan_array};
       jerry_call_function(scan_js_cb, this_val, args_p, 2);
@@ -198,8 +198,8 @@ JERRYXX_FUN(net_wifi_connect) {
   JERRYXX_CHECK_ARG(0, "connectInfo");
   JERRYXX_CHECK_ARG_FUNCTION_OPT(1, "callback");
   jerry_value_t connect_info = JERRYXX_GET_ARG(0);
-  jerry_value_t ssid = jerryxx_get_property(connect_info, MSTR_NET_WIFI_SCANINFO_SSID);
-  jerry_value_t bssid = jerryxx_get_property(connect_info, MSTR_NET_WIFI_SCANINFO_BSSID);
+  jerry_value_t ssid = jerryxx_get_property(connect_info, MSTR_WIFI_SCANINFO_SSID);
+  jerry_value_t bssid = jerryxx_get_property(connect_info, MSTR_WIFI_SCANINFO_BSSID);
 
   if (!jerry_value_is_string(ssid) && !jerry_value_is_string(bssid)) {
     result = jerry_create_error(JERRY_ERROR_TYPE, (const jerry_char_t *)"no SSID/BSSID error");
@@ -223,7 +223,7 @@ JERRYXX_FUN(net_wifi_connect) {
       ssid_len = min(jerryxx_get_ascii_string_size(ssid), 32);
     }
 
-    jerry_value_t pw = jerryxx_get_property(connect_info, MSTR_NET_WIFI_PASSWORD);
+    jerry_value_t pw = jerryxx_get_property(connect_info, MSTR_WIFI_PASSWORD);
 
     if (!jerry_value_is_string(pw)) {
       buffer = (char*) malloc(ssid_len + 1);
@@ -252,11 +252,11 @@ JERRYXX_FUN(net_wifi_connect) {
     free(buffer);
 
     if (connect_ret) {
-      jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, -1);
+      jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, -1);
     } else {
-      jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
-      jerry_value_t connect_js_cb = jerryxx_get_property(JERRYXX_GET_THIS, MSTR_NET_WIFI_CONNECT_CB);
-      jerry_value_t assoc_js_cb = jerryxx_get_property(JERRYXX_GET_THIS, MSTR_NET_WIFI_ASSOC_CB);
+      jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, 0);
+      jerry_value_t connect_js_cb = jerryxx_get_property(JERRYXX_GET_THIS, MSTR_WIFI_CONNECT_CB);
+      jerry_value_t assoc_js_cb = jerryxx_get_property(JERRYXX_GET_THIS, MSTR_WIFI_ASSOC_CB);
       jerry_value_t this_val = jerry_create_undefined();
       if (jerry_value_is_function(assoc_js_cb)) {
         jerry_call_function(assoc_js_cb, this_val, NULL, 0);
@@ -272,7 +272,7 @@ JERRYXX_FUN(net_wifi_connect) {
       jerry_value_t callback = JERRYXX_GET_ARG(1);
       jerry_value_t connect_js_cb = jerry_acquire_value(callback);
       jerry_value_t errno = jerryxx_get_property_number(
-        JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
+        JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, 0);
       jerry_value_t this_val = jerry_create_undefined();
       jerry_value_t args_p[1] = {errno};
       jerry_call_function(connect_js_cb, this_val, args_p, 1);
@@ -289,8 +289,8 @@ JERRYXX_FUN(net_wifi_disconnect) {
   JERRYXX_CHECK_ARG_FUNCTION_OPT(0, "callback");
   int disconnect_ret = wifi_disconnect();
   if (disconnect_ret == 0) {
-    jerry_value_t disconnect_js_cb = jerryxx_get_property(JERRYXX_GET_THIS, MSTR_NET_WIFI_DISCONNECT_CB);
-    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
+    jerry_value_t disconnect_js_cb = jerryxx_get_property(JERRYXX_GET_THIS, MSTR_WIFI_DISCONNECT_CB);
+    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, 0);
     if (jerry_value_is_function(disconnect_js_cb)) {
       jerry_value_t this_val = jerry_create_undefined();
       jerry_call_function(disconnect_js_cb, this_val, NULL, 0);
@@ -299,12 +299,12 @@ JERRYXX_FUN(net_wifi_disconnect) {
     jerry_release_value(disconnect_js_cb);
   } 
   else {
-    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, -1);
+    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, -1);
   }
   if (JERRYXX_HAS_ARG(0)) {
     jerry_value_t callback = JERRYXX_GET_ARG(0);
     jerry_value_t js_cb = jerry_acquire_value(callback);
-    jerry_value_t errno = jerryxx_get_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
+    jerry_value_t errno = jerryxx_get_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, 0);
     jerry_value_t this_val = jerry_create_undefined();
     jerry_value_t args_p[1] = {errno};
     jerry_call_function(js_cb, this_val, args_p, 1);
@@ -322,22 +322,22 @@ JERRYXX_FUN(net_wifi_get_connection) {
   const uint8_t* bssid = NULL;
   wifi_status(&ssid, &bssid);
   if (ssid == NULL) {
-    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, -1);
+    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, -1);
   }
   else {
-    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
-    jerryxx_set_property_string(obj, MSTR_NET_WIFI_SCANINFO_SSID, (char*) ssid);
+    jerryxx_set_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, 0);
+    jerryxx_set_property_string(obj, MSTR_WIFI_SCANINFO_SSID, (char*) ssid);
     if (bssid != NULL) {
       char buffer[18];
       bytes_to_string(bssid, 6, buffer);
-      jerryxx_set_property_string(obj, MSTR_NET_WIFI_SCANINFO_BSSID, "");
+      jerryxx_set_property_string(obj, MSTR_WIFI_SCANINFO_BSSID, "");
     }
   }
 
   if (JERRYXX_HAS_ARG(0)) {
     jerry_value_t callback = JERRYXX_GET_ARG(0);
     jerry_value_t get_connect_js_cb = jerry_acquire_value(callback);
-    jerry_value_t errno = jerryxx_get_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
+    jerry_value_t errno = jerryxx_get_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, 0);
     jerry_value_t this_val = jerry_create_undefined();
     if (ssid != NULL) {
       jerry_value_t args_p[2] = {errno, obj};
@@ -365,7 +365,7 @@ JERRYXX_FUN(net_wifi_ap_mode) {
   jerry_value_t ap_info = JERRYXX_GET_ARG(0);
 
   // validate SSID
-  jerry_value_t ssid = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_SSID);
+  jerry_value_t ssid = jerryxx_get_property(ap_info, MSTR_WIFI_APMODE_SSID);
   if (!jerry_value_is_string(ssid)) {
     result = jerry_create_error(JERRY_ERROR_TYPE, (const jerry_char_t *)"SSID error");
   }
@@ -378,7 +378,7 @@ JERRYXX_FUN(net_wifi_ap_mode) {
     len = min(jerryxx_get_ascii_string_size(ssid), 32);
 
     // validate password
-    jerry_value_t password = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_PASSWORD);
+    jerry_value_t password = jerryxx_get_property(ap_info, MSTR_WIFI_APMODE_PASSWORD);
     if (!jerry_value_is_string(password)) {
       str_buffer = (char *)malloc(len + 1);
     }
@@ -396,7 +396,7 @@ JERRYXX_FUN(net_wifi_ap_mode) {
     jerry_release_value(ssid);
 
     // validate Gateway
-    jerry_value_t gateway = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_GATEWAY);
+    jerry_value_t gateway = jerryxx_get_property(ap_info, MSTR_WIFI_APMODE_GATEWAY);
     if (jerry_value_is_string(gateway)) {
       len = jerryxx_get_ascii_string_size(gateway);
       char storage[16];
@@ -406,18 +406,18 @@ JERRYXX_FUN(net_wifi_ap_mode) {
         result = jerry_create_error(JERRY_ERROR_COMMON, (const jerry_char_t *)"Can't decode Gateway IP Address");
       }
       else {
-        jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_GATEWAY, storage);
+        jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_WIFI_APMODE_GATEWAY, storage);
       }
     } 
     else {
       gw.ipv4.addr = 0xC0A80401;
       SET_IPV4(gw);
-      jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_GATEWAY, "192.168.4.1");
+      jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_WIFI_APMODE_GATEWAY, "192.168.4.1");
     }
     jerry_release_value(gateway);
 
     // validate subnet mask
-    jerry_value_t subnet_mask = jerryxx_get_property(ap_info, MSTR_NET_WIFI_APMODE_SUBNET_MASK);
+    jerry_value_t subnet_mask = jerryxx_get_property(ap_info, MSTR_WIFI_APMODE_SUBNET_MASK);
     if (jerry_value_is_string(subnet_mask)) {
       len = jerryxx_get_ascii_string_size(subnet_mask);
       char storage[16];
@@ -427,13 +427,13 @@ JERRYXX_FUN(net_wifi_ap_mode) {
         result = jerry_create_error(JERRY_ERROR_COMMON, (const jerry_char_t *)"Can't decode Subnet Mask");
       }
       else {
-        jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_SUBNET_MASK, storage);
+        jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_WIFI_APMODE_SUBNET_MASK, storage);
       }
     } 
     else {
       mask.ipv4.addr = 0xFFFFFF00;
       SET_IPV4(mask);
-      jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_NET_WIFI_APMODE_SUBNET_MASK, "255.255.255.0");
+      jerryxx_set_property_string(JERRYXX_GET_THIS, MSTR_WIFI_APMODE_SUBNET_MASK, "255.255.255.0");
     }
     jerry_release_value(subnet_mask);
 
@@ -447,7 +447,7 @@ JERRYXX_FUN(net_wifi_ap_mode) {
         // call callback
         jerry_value_t callback = JERRYXX_GET_ARG(1);
         jerry_value_t js_cb = jerry_acquire_value(callback);
-        jerry_value_t errno = jerryxx_get_property_number(JERRYXX_GET_THIS, MSTR_NET_WIFI_ERRNO, 0);
+        jerry_value_t errno = jerryxx_get_property_number(JERRYXX_GET_THIS, MSTR_WIFI_ERRNO, 0);
         jerry_value_t this_val = jerry_create_undefined();
         jerry_value_t args_p[1] = {errno};
         jerry_call_function(js_cb, this_val, args_p, 1);
@@ -491,7 +491,7 @@ JERRYXX_FUN(net_wifi_ap_get_stas) {
   return MAC_array;
 }
 
-jerry_value_t wifi_initialize() {
+jerry_value_t module_wifi_init() {
   wifi_callbacks.callback_report = wifi_report_implementation;
   wifi_callbacks.callback_link = wifi_link_implementation;
 
@@ -500,35 +500,35 @@ jerry_value_t wifi_initialize() {
       jerry_create_external_function(net_wifi_ctor_fn);
   jerry_value_t wifi_prototype = jerry_create_object();
   jerryxx_set_property(net_wifi_ctor, "prototype", wifi_prototype);
-  jerryxx_set_property_function(wifi_prototype, MSTR_NET_WIFI_RESET,
+  jerryxx_set_property_function(wifi_prototype, MSTR_WIFI_RESET,
                                 net_wifi_reset);
-  jerryxx_set_property_function(wifi_prototype, MSTR_NET_WIFI_SCAN,
+  jerryxx_set_property_function(wifi_prototype, MSTR_WIFI_SCAN,
                                 net_wifi_scan);
-  jerryxx_set_property_function(wifi_prototype, MSTR_NET_WIFI_CONNECT,
+  jerryxx_set_property_function(wifi_prototype, MSTR_WIFI_CONNECT,
                                 net_wifi_connect);
-  jerryxx_set_property_function(wifi_prototype, MSTR_NET_WIFI_DISCONNECT,
+  jerryxx_set_property_function(wifi_prototype, MSTR_WIFI_DISCONNECT,
                                 net_wifi_disconnect);
   jerryxx_set_property_function(wifi_prototype,
-                                MSTR_NET_WIFI_GET_CONNECTION,
+                                MSTR_WIFI_GET_CONNECTION,
                                 net_wifi_get_connection);
   jerryxx_set_property_function(wifi_prototype,
-                                MSTR_NET_WIFI_APMODE_FN,
+                                MSTR_WIFI_APMODE_FN,
                                 net_wifi_ap_mode);
   jerryxx_set_property_function(wifi_prototype,
-                                MSTR_NET_WIFI_APMODE_GET_STAS_FN,
+                                MSTR_WIFI_APMODE_GET_STAS_FN,
                                 net_wifi_ap_get_stas);
   jerryxx_set_property_function(wifi_prototype,
-                                MSTR_NET_WIFI_APMODE_DISABLE_FN,
+                                MSTR_WIFI_APMODE_DISABLE_FN,
                                 net_wifi_disable_ap_mode);
-  // jerryxx_set_property_function(wifi_prototype, MSTR_NET_GETGPIO,
+  // jerryxx_set_property_function(wifi_prototype, MSTR_GETGPIO,
   //                              net_get_gpio);
-  // jerryxx_set_property_function(wifi_prototype, MSTR_NET_PUTGPIO,
+  // jerryxx_set_property_function(wifi_prototype, MSTR_PUTGPIO,
   //                              net_put_gpio);
   jerry_release_value(wifi_prototype);
 
   /* pico_cyw43 module exports */
   jerry_value_t exports = jerry_create_object();
-  jerryxx_set_property(exports, MSTR_NET_WIFI, net_wifi_ctor);
+  jerryxx_set_property(exports, MSTR_WIFI, net_wifi_ctor);
   jerry_release_value(net_wifi_ctor);
 
   return exports;
